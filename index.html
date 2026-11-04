@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arduino Uno en 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e4f1f0;--bg2:#f7fcfb;--ink:#0b2a2c;--mut:#4d7471;--panel:rgba(255,255,255,.88);--acc:#007a80;--on:#fff;--chip:#cfe5e3;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#061a1c;--bg2:#0e3a3e;--ink:#e6f4f2;--mut:#8fb5b2;--panel:rgba(6,24,26,.88);--acc:#35d6cf;--on:#04201f;--chip:#12383b}}
+:root[data-theme="dark"]{--bg:#061a1c;--bg2:#0e3a3e;--ink:#e6f4f2;--mut:#8fb5b2;--panel:rgba(6,24,26,.88);--acc:#35d6cf;--on:#04201f;--chip:#12383b}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:radial-gradient(circle at 50% 38%,var(--bg2),var(--bg) 70%);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+#c{position:fixed;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#top{position:fixed;top:0;left:0;right:0;padding:calc(env(safe-area-inset-top,0px) + 16px) 20px 0;pointer-events:none}
+#top h1{margin:0;font-size:1.5rem;font-weight:700;letter-spacing:-.02em}
+#top p{margin:4px 0 0;color:var(--mut);font-size:.88rem;max-width:30ch}
+#p{position:fixed;left:0;right:0;bottom:0;background:var(--panel);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border-radius:20px 20px 0 0;padding:16px 0 calc(env(safe-area-inset-bottom,0px) + 14px)}
+#n{margin:0 20px;font-size:1.15rem;font-weight:700}
+#d{margin:4px 20px 12px;color:var(--mut);font-size:.95rem;line-height:1.4;max-width:60ch;min-height:2.8em}
+#chips{display:flex;gap:8px;overflow-x:auto;padding:0 20px 2px;scrollbar-width:none}
+#chips::-webkit-scrollbar{display:none}
+#chips button{flex:none;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:inherit;font-size:.85rem;padding:8px 14px;cursor:pointer}
+#chips button[aria-pressed="true"]{background:var(--acc);color:var(--on)}
+#chips button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#arb{position:fixed;top:calc(env(safe-area-inset-top,0px) + 16px);right:16px;border:0;border-radius:999px;background:var(--acc);color:var(--on);font:inherit;font-weight:700;font-size:.9rem;padding:10px 16px;cursor:pointer}
+#st{position:absolute;left:16px;right:16px;bottom:calc(env(safe-area-inset-bottom,0px) + 90px);text-align:center;color:#fff;font-size:.8rem;text-shadow:0 1px 3px #000}
+#cam{position:fixed;top:calc(env(safe-area-inset-top,0px) + 66px);right:16px;border:0;border-radius:999px;background:var(--chip);color:var(--ink);font:inherit;font-weight:700;font-size:.9rem;padding:10px 16px;cursor:pointer}
+#v{display:none;position:fixed;inset:0;width:100%;height:100%;object-fit:cover}
+#cx{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);border:0;border-radius:999px;background:#fff;color:#0b2a2c;font:inherit;font-weight:700;padding:12px 24px}
+body.cm{background:#000}
+body.cm #v,body.cm #cx{display:block}
+body.cm #p,body.cm #top,body.cm #arb,body.cm #cam{display:none}
+#arb:focus-visible,#exit:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#ar{display:none;position:fixed;inset:0;pointer-events:none;font-family:inherit}
+#ar p{position:absolute;left:16px;right:16px;top:calc(env(safe-area-inset-top,0px) + 16px);margin:0;padding:10px 14px;border-radius:14px;background:rgba(6,24,26,.78);color:#e6f4f2;font-size:.95rem;text-align:center}
+#exit{pointer-events:auto;position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 24px);border:0;border-radius:999px;background:#fff;color:#0b2a2c;font:inherit;font-weight:700;padding:12px 24px}
+</style>
+</head>
+<body>
+<video id="v" playsinline muted autoplay></video>
+<canvas id="c"></canvas>
+<div id="top"><h1>Arduino Uno</h1><p>Arrastra para girar, pellizca para acercar y toca una pieza.</p></div>
+<button id="arb">Ver en AR</button><button id="cam">Modo cámara</button><button id="cx">Salir de cámara</button>
+<div id="ar"><p>Apunta a una mesa o al suelo y toca para colocar la placa. Toca de nuevo para moverla.</p><div id="st"></div><button id="exit">Salir de AR</button></div>
+<div id="p"><h2 id="n">Toca una pieza</h2><p id="d">Cada componente de la placa se explica aquí.</p><div id="chips"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const cv=$("c");
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:false,alpha:true});renderer.setClearColor(0x000000,0);
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+const scene=new THREE.Scene();
+const cam=new THREE.PerspectiveCamera(40,1,.1,200);
+scene.add(new THREE.HemisphereLight(0xffffff,0x446666,.9));
+const sun=new THREE.DirectionalLight(0xffffff,.95);
+sun.position.set(4,9,5);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:25});
+scene.add(sun);
+
+const board=new THREE.Group();scene.add(board);
+const TOP=.08;
+const mat=(c,r=.55,m=.1)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+const pcbM=mat(0x0a8f94,.45,.05),black=mat(0x1b1b1d,.6,.1),gold=mat(0xd4af37,.35,.9),steel=mat(0xc9cdd1,.3,.9);
+const parts={},info={};
+
+function add(m,name){
+  m.castShadow=m.receiveShadow=true;m.userData.base=[0,0];
+  if(name){m.material=m.material.clone();m.userData.part=name;(parts[name]=parts[name]||[]).push(m)}
+  board.add(m);return m;
+}
+function box(w,h,d,x,z,mt,name,y0=0){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mt);m.position.set(x,TOP+y0+h/2,z);return add(m,name)}
+function cyl(r,h,x,z,mt,name,y0=0){const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,h,28),mt);m.position.set(x,TOP+y0+h/2,z);return add(m,name)}
+function def(name,desc){info[name]=desc}
+
+// Placa
+const pcb=new THREE.Mesh(new THREE.BoxGeometry(6.86,.16,5.33),pcbM);
+pcb.receiveShadow=pcb.castShadow=true;board.add(pcb);
+[[-2.9,-2.1],[-3,1.9],[2.9,-2.4],[2.9,1.6]].forEach(([x,z])=>{const h=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,.18,20),mat(0x0b2a2c,.9,0));h.position.set(x,0,z);board.add(h)});
+
+// Logo
+{const c=document.createElement("canvas");c.width=512;c.height=256;const g=c.getContext("2d");
+ g.fillStyle="#fff";g.textAlign="center";g.font="700 72px sans-serif";g.fillText("ARDUINO",256,95);g.font="700 104px sans-serif";g.fillText("UNO",256,205);
+ const t=new THREE.CanvasTexture(c);t.anisotropy=4;
+ const l=new THREE.Mesh(new THREE.PlaneGeometry(2,1),new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false}));
+ l.rotation.x=-Math.PI/2;l.position.set(1.5,TOP+.004,-.5);board.add(l)}
+
+// Pines
+function header(n,x0,z,name){const w=n*.254;box(w,.25,.25,x0+w/2,z,black,name);for(let i=0;i<n;i++)box(.07,.3,.07,x0+.127+i*.254,z,gold,name,.25)}
+def("Pines digitales (0–13)","Entradas y salidas digitales: aquí conectas LEDs, botones y sensores. Los pines 3, 5, 6, 9, 10 y 11 permiten PWM.");
+header(8,.45,-2.3,"Pines digitales (0–13)");header(10,-2.2,-2.3,"Pines digitales (0–13)");
+def("Pines analógicos (A0–A5)","Leen voltajes variables, como los de un potenciómetro o un sensor de luz.");
+header(6,1.24,2.3,"Pines analógicos (A0–A5)");
+def("Pines de alimentación","Entregan 3,3 V, 5 V, GND y VIN para alimentar tus circuitos.");
+header(8,-1,2.3,"Pines de alimentación");
+
+// Conectores
+def("Puerto USB-B","Conecta la placa al computador: sube tu programa y le da 5 V de energía.");
+box(1.6,1.1,1.2,-3.23,-1.1,steel,"Puerto USB-B");
+def("Conector de alimentación","Jack de 2,1 mm para 7–12 V (pila o adaptador) cuando no usas el USB.");
+box(1.4,1.1,.95,-3.13,1.5,mat(0x161616,.7,.05),"Conector de alimentación");
+
+// Chips
+def("Microcontrolador ATmega328P","El cerebro de la placa: ejecuta tu programa. Tiene 32 KB de memoria para el código.");
+box(3.5,.35,.72,1.0,.9,black,"Microcontrolador ATmega328P");
+[-.3,.3].forEach(dz=>box(3.3,.05,.06,1.0,.9+dz*1.25,steel,"Microcontrolador ATmega328P"));
+cyl(.09,.01,-.55,.7,mat(0x555555,.8,0),"Microcontrolador ATmega328P",.35);
+def("Chip USB (ATmega16U2)","Traduce la comunicación USB para que el computador pueda hablar con el microcontrolador.");
+box(.9,.12,.9,-1.5,-.7,black,"Chip USB (ATmega16U2)");
+def("Cristal 16 MHz","Es el reloj: marca el ritmo al que trabaja el microcontrolador.");
+box(.55,.22,.2,-.2,-.2,steel,"Cristal 16 MHz");
+def("Regulador de voltaje","Convierte la entrada de 7–12 V en 5 V estables para la placa.");
+box(.9,.45,.6,-.9,1.2,black,"Regulador de voltaje");box(.5,.08,.5,-.9,1.2,steel,"Regulador de voltaje",.45);
+def("Condensadores","Estabilizan la energía y filtran los picos de voltaje.");
+cyl(.3,.5,-1.95,.3,mat(0x4a5a63,.4,.5),"Condensadores");cyl(.3,.5,-1.95,1.4,mat(0x4a5a63,.4,.5),"Condensadores");
+def("Botón reset","Reinicia el programa desde el principio.");
+box(.6,.2,.6,-2.4,-2.05,black,"Botón reset");cyl(.2,.22,-2.4,-2.05,mat(0xd9332b,.4,0),"Botón reset",.2);
+
+// LEDs
+function led(x,z,col,name,i){const m=box(.22,.1,.14,x,z,mat(col,.4,0),name);m.userData.base=[col,i];return m}
+def("LED L (pin 13)","LED integrado conectado al pin 13. Es el que parpadea en el ejemplo Blink.");
+const ledL=led(2.3,-1.6,0xffa000,"LED L (pin 13)",.1);
+def("LEDs TX y RX","Parpadean cuando la placa envía o recibe datos por USB.");
+led(-.4,-1.1,0xffa000,"LEDs TX y RX",.5);led(-.4,-.75,0xffa000,"LEDs TX y RX",.5);
+def("LED ON","Se enciende cuando la placa tiene energía.");
+led(1.6,-1.6,0x22ff66,"LED ON",1);
+
+// Sombra
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.ShadowMaterial({opacity:.22}));
+floor.rotation.x=-Math.PI/2;floor.position.y=-.4;floor.receiveShadow=true;scene.add(floor);
+
+// Selección
+let sel=null;
+function apply(m,on){const e=m.material;if(on){e.emissive.set(0x00f0e0);e.emissiveIntensity=.7}else{e.emissive.set(m.userData.base[0]);e.emissiveIntensity=m.userData.base[1]}}
+function select(name){
+  if(sel)parts[sel].forEach(m=>apply(m,false));
+  sel=(name&&name!==sel)?name:null;
+  if(sel)parts[sel].forEach(m=>apply(m,true));
+  $("n").textContent=sel||"Toca una pieza";
+  $("d").textContent=sel?info[sel]:"Cada componente de la placa se explica aquí.";
+  document.querySelectorAll("#chips button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.n===sel)));
+}
+Object.keys(info).forEach(n=>{const b=document.createElement("button");b.textContent=n;b.dataset.n=n;b.setAttribute("aria-pressed","false");b.onclick=()=>select(n);$("chips").appendChild(b)});
+
+// Cámara y controles
+let yaw=-.55,pitch=.8,dist=12,fit=12,auto=!matchMedia("(prefers-reduced-motion: reduce)").matches,moved=0,pinch=0,ready=false;
+const ptr=new Map(),ray=new THREE.Raycaster(),v2=new THREE.Vector2();
+const pd=()=>{const [a,b]=[...ptr.values()];return Math.hypot(a.x-b.x,a.y-b.y)};
+function size(){
+  const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);cam.aspect=w/h;
+  cam.setViewOffset(w,h,0,$("p").offsetHeight/2,w,h);
+  fit=Math.max(9,9.6/(.728*cam.aspect));if(!ready){dist=fit;ready=true}
+}
+addEventListener("resize",size);
+cv.addEventListener("pointerdown",e=>{cv.setPointerCapture(e.pointerId);ptr.set(e.pointerId,{x:e.clientX,y:e.clientY});moved=0;auto=false;if(ptr.size===2)pinch=pd()});
+cv.addEventListener("pointermove",e=>{
+  const p=ptr.get(e.pointerId);if(!p)return;
+  const dx=e.clientX-p.x,dy=e.clientY-p.y;p.x=e.clientX;p.y=e.clientY;moved+=Math.abs(dx)+Math.abs(dy);
+  if(ptr.size===1){if(camMode)board.rotation.y+=dx*.01;else{yaw-=dx*.008;pitch=clamp(pitch+dy*.006,.1,1.5)}}
+  else if(ptr.size===2){const d=pd();dist=clamp(dist*pinch/d,4.5,fit*1.5);pinch=d}
+});
+cv.addEventListener("pointerup",e=>{
+  if(ptr.size===1&&moved<8){
+    v2.set(e.clientX/innerWidth*2-1,-(e.clientY/innerHeight)*2+1);ray.setFromCamera(v2,cam);
+    const h=ray.intersectObject(board,true)[0];
+    select(h&&h.object.userData.part?h.object.userData.part:null);
+  }
+  ptr.delete(e.pointerId);
+});
+cv.addEventListener("pointercancel",e=>ptr.delete(e.pointerId));
+cv.addEventListener("wheel",e=>{e.preventDefault();auto=false;dist=clamp(dist*(1+e.deltaY*.001),4.5,fit*1.5)},{passive:false});
+
+size();
+function loop(t,frame){
+  if(renderer.xr.isPresenting){hits(frame)}else if(camMode){camUpdate()}else{
+  if(auto)yaw+=.0025;
+  cam.position.set(dist*Math.sin(yaw)*Math.cos(pitch),dist*Math.sin(pitch),dist*Math.cos(yaw)*Math.cos(pitch));
+  cam.lookAt(0,0,0);}
+  ledL.userData.base=[0xffa000,Math.sin(t/500)>0?1:.1];
+  if(sel!==ledL.userData.part)apply(ledL,false);
+  renderer.render(scene,cam);
+}
+
+// Realidad aumentada (WebXR, Chrome en Android)
+renderer.xr.enabled=true;scene.add(sun.target);
+const S=.02;let hitSrc=null,xrOK=false,fr=0,hc=0,camMode=false,a0=null,ori=null;
+const reticle=new THREE.Mesh(new THREE.RingGeometry(.07,.09,32).rotateX(-Math.PI/2),new THREE.MeshBasicMaterial({color:0x35d6cf}));
+reticle.matrixAutoUpdate=false;reticle.visible=false;scene.add(reticle);
+if(navigator.xr)navigator.xr.isSessionSupported("immersive-ar").then(v=>{xrOK=v}).catch(()=>{});
+function hits(frame){
+  fr++;if(fr%10===0)$("st").textContent="cuadros "+fr+" | superficies detectadas "+hc;if(!frame||!hitSrc)return;
+  const r=frame.getHitTestResults(hitSrc);
+  if(r.length){hc++;reticle.visible=true;reticle.matrix.fromArray(r[0].getPose(renderer.xr.getReferenceSpace()).transform.matrix)}else reticle.visible=false;
+}
+function place(){
+  const p=new THREE.Vector3().setFromMatrixPosition(reticle.matrix);
+  board.visible=floor.visible=true;
+  board.scale.setScalar(S);board.position.set(p.x,p.y+.08*S,p.z);
+  floor.scale.setScalar(S);floor.position.set(p.x,p.y+.001,p.z);
+  sun.position.set(p.x+.04,p.y+.09,p.z+.05);sun.target.position.copy(p);sun.target.updateMatrixWorld();
+  Object.assign(sun.shadow.camera,{left:-.07,right:.07,top:.07,bottom:-.07,near:.01,far:.4});sun.shadow.camera.updateProjectionMatrix();
+}
+function endAR(){
+  hitSrc=null;reticle.visible=false;board.visible=floor.visible=true;
+  board.scale.setScalar(1);board.position.set(0,0,0);floor.scale.setScalar(1);floor.position.set(0,-.4,0);
+  sun.position.set(4,9,5);sun.target.position.set(0,0,0);
+  Object.assign(sun.shadow.camera,{left:-6,right:6,top:6,bottom:-6,near:1,far:25});sun.shadow.camera.updateProjectionMatrix();
+  $("ar").style.display="none";size();
+}
+$("exit").addEventListener("beforexrselect",e=>e.preventDefault());
+$("exit").onclick=()=>{const s=renderer.xr.getSession();if(s)s.end()};
+$("arb").onclick=async()=>{
+  if(!xrOK){$("n").textContent="AR no disponible aquí";$("d").textContent="Abre este enlace directamente en Chrome en tu Android, fuera de otra app, y toca Ver en AR de nuevo.";return}
+  try{
+    const s=await navigator.xr.requestSession("immersive-ar",{requiredFeatures:["hit-test"],optionalFeatures:["dom-overlay"],domOverlay:{root:$("ar")}});
+    $("ar").style.display="block";
+    renderer.xr.setReferenceSpaceType("local");
+    await renderer.xr.setSession(s);
+    const vs=await s.requestReferenceSpace("viewer");
+    hitSrc=await s.requestHitTestSource({space:vs});
+    board.visible=floor.visible=false;
+    s.addEventListener("select",()=>{if(reticle.visible)place()});
+    s.addEventListener("end",endAR);
+  }catch(err){$("ar").style.display="none";$("d").textContent="No se pudo iniciar la AR: "+err.message}
+};
+// Modo cámara (sin ARCore): video de fondo + giroscopio
+const rad=d=>d*Math.PI/180,eu=new THREE.Euler(),q0=new THREE.Quaternion(),q1=new THREE.Quaternion(-Math.sqrt(.5),0,0,Math.sqrt(.5)),zA=new THREE.Vector3(0,0,1);
+addEventListener("deviceorientation",e=>{if(e.alpha==null)return;if(a0===null)a0=e.alpha;ori=[e.alpha-a0,e.beta,e.gamma]});
+function camUpdate(){
+  cam.position.set(0,0,0);board.scale.setScalar(clamp(fit/dist,.3,3));
+  if(ori){const o=rad((screen.orientation&&screen.orientation.angle)||0);eu.set(rad(ori[1]),rad(ori[0]),-rad(ori[2]),"YXZ");cam.quaternion.setFromEuler(eu);cam.quaternion.multiply(q1);cam.quaternion.multiply(q0.setFromAxisAngle(zA,-o))}
+}
+$("cam").onclick=async()=>{
+  try{
+    const st=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+    $("v").srcObject=st;await $("v").play();
+    camMode=true;document.body.classList.add("cm");a0=null;ori=null;cam.clearViewOffset();auto=false;dist=fit;
+    const y=-fit*.3;board.position.set(0,y,-fit);floor.position.set(0,y-.4,-fit);
+    sun.position.set(4,y+9,-fit+5);sun.target.position.set(0,y,-fit);sun.target.updateMatrixWorld();
+  }catch(err){$("n").textContent="No se pudo abrir la cámara";$("d").textContent=(err.name||"Error")+": "+(err.message||"")+". Si dice NotAllowedError, el navegador bloquea la cámara en esta página."}
+};
+$("cx").onclick=()=>{
+  const s=$("v").srcObject;if(s)s.getTracks().forEach(t=>t.stop());$("v").srcObject=null;
+  camMode=false;document.body.classList.remove("cm");board.rotation.y=0;endAR();
+};
+renderer.setAnimationLoop(loop);
+</script>
+</body>
+</html>
